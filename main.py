@@ -1,7 +1,10 @@
+from __future__ import division
 import argparse
 import time
+import math
 from datetime import datetime
 from threading import Thread
+from decimal import *
 
 class CalculationThread(Thread):
 
@@ -20,15 +23,15 @@ class CalculationThread(Thread):
         Thread.join(self)
         return self.product
 
-    def calculate_sum_el(self,n):
+    def calculate_el(self,n):
         # Chudonovsky brothers formula for calculating Pi
-        time.sleep(2)
-        print n
-        return 5*n
+        left = (Decimal(-1))**Decimal(n) * (Decimal(math.factorial(6*n))) / (Decimal(math.factorial(3*n)) * Decimal(math.factorial(n)) ** 3)
+        right = (Decimal(13591409) + Decimal(545120134) * n) / Decimal(640320**3)**Decimal(n+0.5)
+        return left * right
     
     def calculate_all(self):
         for el in self.list_to_calc:
-            self.product += self.calculate_sum_el(el)
+            self.product += self.calculate_el(el)
 
 
 
@@ -38,7 +41,6 @@ def divideList(l, n):
     return [l[i::n] for i in xrange(n)]
 
 def main():
-
     starting_time = datetime.now()
 
     parser = argparse.ArgumentParser(description='Multithreaded calculation of pi')
@@ -59,11 +61,12 @@ def main():
     for th in threads:
         th.start()
     
-    pi=0
+    sums=0
     for th in threads:
-        pi += th.join()
-
-    print 'Pi: %d' % pi
+        sums += th.join()
+    pi =  1 / (12*sums)
+    print 'Stock pi: %10.40f' % math.pi
+    print 'Pi:       %10.40f' % pi
     print 'Calculation finished! %s' % (datetime.now() - starting_time)
     print 'Threads used: %s' % args.t
 
