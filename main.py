@@ -85,6 +85,7 @@ def main():
         print 'Pi:       %10.40f' % pi
         print 'Threads used: %s' % args.t
     
+    
     print 'Calculation finished! %s (milliseconds)' % (calculate_time_elapsed(starting_time, datetime.now()))
     # Persist pi value
     persist_pi(args.o, pi)
