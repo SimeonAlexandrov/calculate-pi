@@ -1,44 +1,31 @@
 from __future__ import division
 import argparse
-import time
 import math
 from datetime import datetime
-from threading import Thread
-from decimal import *
+from decimal import Decimal
+from multiprocessing import Process, Queue
 
-class CalculationThread(Thread):
 
-    def __init__(self, thread_id, list_to_calc, quiet_mode):
-        Thread.__init__(self)
-        self.thread_id = thread_id
-        self.list_to_calc = list_to_calc
-        self.product = 0
-        self.time_started = datetime.now()
-        self.quiet_mode = quiet_mode
+def calculate_el(n):
+    # Chudonovsky brothers formula for calculating Pi
+    left = (Decimal(-1))**Decimal(n) * (Decimal(math.factorial(6*n))) / (Decimal(math.factorial(3*n)) * Decimal(math.factorial(n)) ** 3)
+    right = (Decimal(13591409) + Decimal(545120134) * n) / Decimal(640320**3)**Decimal(n+0.5)
+    return left * right
 
-    def run(self):
-        if not self.quiet_mode:
-            print 'Starting thread %s' % self.thread_id
-        self.calculate_all()
-        if not self.quiet_mode:
-            print 'Thread %s has finished' % self.thread_id 
+def calculate_subset(q, thread_id, list_to_calc, quiet_mode):
+    thread_start_time = datetime.now()
+    product = 0
+    if not quiet_mode:
+        print 'Starting thread %s' % thread_id
 
-    def join(self):
-        Thread.join(self)
-        if not self.quiet_mode:
-            print 'Thread %s execution time was  %s (milliseconds)' % (self.thread_id, calculate_time_elapsed(self.time_started, datetime.now()))
-        return self.product
+    for el in list_to_calc:
+        product += calculate_el(el)
 
-    def calculate_el(self,n):
-        # Chudonovsky brothers formula for calculating Pi
-        left = (Decimal(-1))**Decimal(n) * (Decimal(math.factorial(6*n))) / (Decimal(math.factorial(3*n)) * Decimal(math.factorial(n)) ** 3)
-        right = (Decimal(13591409) + Decimal(545120134) * n) / Decimal(640320**3)**Decimal(n+0.5)
-        return left * right
-    
-    def calculate_all(self):
-        for el in self.list_to_calc:
-            self.product += self.calculate_el(el)
-
+    if not quiet_mode:
+        print 'Thread %s has finished' % thread_id 
+        print 'Thread %s execution time was  %s (milliseconds)' % (thread_id, calculate_time_elapsed(thread_start_time, datetime.now()))
+    q.put(product)
+     
             
 def divide_list(l, n):
     # i index
@@ -46,7 +33,7 @@ def divide_list(l, n):
     return [l[i::n] for i in xrange(n)]
 
 def calculate_time_elapsed(started, ended):
-    return (ended - started).total_seconds()* 1000
+    return int((ended - started).total_seconds()* 1000)
 
 def persist_pi(output_file, value):
     if output_file is None:
@@ -54,7 +41,8 @@ def persist_pi(output_file, value):
     with open(output_file, 'w') as out:
         out.write('%s \n' % value)
 
-def main():
+def main() :
+
     starting_time = datetime.now()
 
     parser = argparse.ArgumentParser(description='Multithreaded calculation of pi')
@@ -64,31 +52,41 @@ def main():
     parser.add_argument('-q', help='Quiet mode', action='store_true')
     args = parser.parse_args()
 
+    # Default number of threads is 1
+    if not args.t:
+        args.t = 1
+    if not args.p:
+        raise Exception('Number of elements mus be specified')
+
     threads = []
     accuracy_list = range(int(args.p))
     divided = divide_list(accuracy_list, int(args.t))
 
+    q = Queue(int(args.t)) # Max size is the number of threads
+
     for i in xrange(1,int(args.t) + 1):
-        thread = CalculationThread(i, divided[i - 1], args.q)
+        thread = Process(target=calculate_subset, args=(q, i, divided[i - 1], args.q, ))
+        thread.start()
         threads.append(thread)
 
-    for th in threads:
-        th.start()
-    
-    sums=0
-    for th in threads:
-        sums += th.join()
-    pi =  1 / (12*sums)
+    for thread in threads:
+        thread.join()
+
+    total_sum = 0
+
+    while not q.empty():
+        total_sum += q.get()
+
+    pi =  1 / (12*total_sum)
+
     if  not args.q:
         # If not in quiet mode
         print 'Math.pi: %10.40f' % math.pi
-        print 'Pi:       %10.40f' % pi
+        print 'Pi:      %10.40f' % pi
         print 'Threads used: %s' % args.t
-    
-    
+
     print 'Calculation finished! %s (milliseconds)' % (calculate_time_elapsed(starting_time, datetime.now()))
     # Persist pi value
     persist_pi(args.o, pi)
-
 if __name__ == '__main__':
     main()
